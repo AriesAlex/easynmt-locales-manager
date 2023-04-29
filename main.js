@@ -1,4 +1,6 @@
-import fetch from 'node-fetch'
+import originalFetch from 'node-fetch'
+import initFetch from 'fetch-retry'
+const fetch = initFetch(originalFetch)
 import fs from 'fs-extra'
 import { URL } from 'url'
 import structuredClone from 'structured-clone'
@@ -224,7 +226,7 @@ class Translator {
       console.log(`\nTranslating.. [${sourceLang}=>${targetLang}]`)
     }
 
-    const res = await fetch(url)
+    const res = await fetch(url, { retries: 3, retryDelay: 1000 })
     const translated = (await res.json()).translated
     console.log(`Translated:  `, translated)
     return returnWithTargetLang ? { texts: translated, targetLang } : translated
