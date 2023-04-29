@@ -1,0 +1,18 @@
+{
+  "name": "easynmt-locales-manager",
+  "version": "1.0.0",
+  "description": "",
+  "main": "main.js",
+  "type": "module",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "fs-extra": "^11.1.1",
+    "node-fetch": "^3.3.1",
+    "structured-clone": "^0.2.2"
+  }
+}
