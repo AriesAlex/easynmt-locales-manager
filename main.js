@@ -52,16 +52,15 @@ function getNextAvailableTargetLang(sourceLang, targetLang) {
 const defaultOptions = {
   mainLocale: 'ru',
   localesFolder: 'locales',
-  useTranslationWays: true,
+  useTranslationWays: false,
 }
 
 class Translator {
   translations = null
-  alreadyPrintedMainLocaleTexts = false
 
   constructor(options = defaultOptions) {
     const mergedOptions = { ...defaultOptions, ...options }
-    for (const optionKey of Object.keys(options)) {
+    for (const optionKey of Object.keys(mergedOptions)) {
       this[optionKey] = mergedOptions[optionKey]
     }
 
@@ -192,6 +191,15 @@ class Translator {
     }
   }
 
+  splitArray(arr, size) {
+    const result = []
+    for (let i = 0; i < arr.length; i += size) {
+      const chunk = arr.slice(i, i + size)
+      result.push(chunk)
+    }
+    return result
+  }
+
   async translate(
     texts,
     sourceLang = 'ru',
@@ -215,20 +223,62 @@ class Translator {
       texts = translated.texts
     }
 
-    let url = 'http://localhost:24080/translate?'
-    url += `source_lang=${sourceLang}&target_lang=${targetLang}`
-    for (const text of texts) url += `&text=${encodeURIComponent(text)}`
+    const translated = []
 
-    if (sourceLang == this.mainLocale && !this.alreadyPrintedMainLocaleTexts) {
-      console.log(`Translating.. [${sourceLang}=>${targetLang}]`, texts)
-      this.alreadyPrintedMainLocaleTexts = true
-    } else {
-      console.log(`\nTranslating.. [${sourceLang}=>${targetLang}]`)
+    for (const textsChunk of this.splitArray(texts, 5)) {
+      let url = 'http://localhost:24080/translate?'
+      url += `source_lang=${sourceLang}&target_lang=${targetLang}`
+      for (const text of textsChunk) url += `&text=${encodeURIComponent(text)}`
+
+      const progressPercentage = (
+        (translated.length / texts.length) *
+        100
+      ).toFixed(2)
+      console.log(
+        `Translating.. [${sourceLang}=>${targetLang}] ${progressPercentage}%`,
+        textsChunk
+      )
+      let res = null
+      try {
+        res = await fetch(url, { retries: 3, retryDelay: 1000 })
+      } catch (e) {
+        console.error('Connection error -> retrying..')
+        console.error(e)
+        return await this.translate(
+          texts,
+          sourceLang,
+          targetLang,
+          returnWithTargetLang
+        )
+      }
+      const resText = await res.text()
+      let translatedChunk = null
+      if (resText == 'Internal Server Error') {
+        console.error(resText, 'retrying..')
+        translatedChunk = await this.translate(
+          textsChunk,
+          sourceLang,
+          targetLang,
+          returnWithTargetLang
+        )
+      } else if (
+        resText.startsWith(`{"detail":"Error: Can't load tokenizer for `)
+      ) {
+        this.useTranslationWays = true
+        console.error(
+          'Tokenizer error -> trying again with translation ways on'
+        )
+        return await this.translate(
+          texts,
+          sourceLang,
+          targetLang,
+          returnWithTargetLang
+        )
+      } else translatedChunk = JSON.parse(resText).translated
+
+      console.log(`Translated:`, translatedChunk)
+      translated.push(...translatedChunk)
     }
-
-    const res = await fetch(url, { retries: 3, retryDelay: 1000 })
-    const translated = (await res.json()).translated
-    console.log(`Translated:  `, translated)
     return returnWithTargetLang ? { texts: translated, targetLang } : translated
   }
 }
